@@ -18,7 +18,7 @@ fn main() {
         println!("6. Check compatibility of 2 files using key");
         println!("7. Readme");
         println!("8. Clean cache");
-        println!("0. Zakończ");
+        println!("0. Finish");
 
         stdin
             .read_line(&mut buffer)
@@ -31,26 +31,37 @@ fn main() {
         }
 
         match option {
-            -1 => println!("Zły input"),
             0 => return,
-            1 => cached_content = load(&stdin, "Message").unwrap_or_default(),
-            //1 => cipher(&stdin),
+            1 => store_and_print(load(&stdin, "Message"), &mut cached_content),
             2 => println!("{}", turn_into_bytes(&cached_content)),
-            3 => cached_key = generate_key(&cached_content).unwrap_or_default(),
-            4 => cipher(&stdin, &mut cached_content, &mut cached_key),
-            5 => decipher(&stdin, &mut cached_content, &mut cached_key),
+            3 => cached_key = generate_key(&cached_content),
+            4 => print_result(cipher(&stdin, &mut cached_content, &mut cached_key)),
+            5 => print_result(decipher(&stdin, &mut cached_content, &mut cached_key)),
             6 => check_compatibility(&stdin, &mut cached_key),
             7 => print_readme(),
             8 => {
                 cached_content = Vec::new();
                 cached_key = Vec::new();
             }
-            _ => println!("Zły input"),
+            _ => println!("Bad Input"),
         }
     }
 }
 
-fn cipher(stdin: &Stdin, content: &mut Vec<u8>, key: &mut Vec<u8>) {
+fn print_result(result: Result<String, String>) {
+    match result {
+        Ok(message) => println!("{}", message),
+        Err(error_message) => println!("{}", error_message),
+    }
+}
+
+fn store_and_print(result: Result<Vec<u8>, String>, out_vec: &mut Vec<u8>) {
+    match result {
+        Ok(vector) => *out_vec = vector,
+        Err(error_message) => println!("{}", error_message),
+    }
+}
+fn cipher(stdin: &Stdin, content: &mut Vec<u8>, key: &mut Vec<u8>) -> Result<String, String> {
     if content.is_empty() {
         println!("There is no message currently loaded");
         *content = load(stdin, "Raw Message").unwrap_or_default();
@@ -60,14 +71,12 @@ fn cipher(stdin: &Stdin, content: &mut Vec<u8>, key: &mut Vec<u8>) {
         *key = load(stdin, "Key").unwrap_or_default();
     }
     if content.is_empty() || key.is_empty() {
-        println!("Couldn't find key or message");
-        return;
+        return Err("Error: Couldn't find key or message".to_string());
     }
-    println!("Type filename of 'ciphred_file'.");
+    println!("Type filename of result file of ciphering.");
     let filenames = get_filenames(stdin);
     if filenames.0.is_none() {
-        println!("Wrong file names");
-        return;
+        return Err("Error: Wrong file names".to_string());
     }
     let ciphred_filename = filenames.0.unwrap();
 
@@ -77,10 +86,15 @@ fn cipher(stdin: &Stdin, content: &mut Vec<u8>, key: &mut Vec<u8>) {
         let content_byte = content[iteration];
         ciphred.push(content_byte ^ key_byte);
     }
-    fs::write(ciphred_filename, ciphred).expect("Writting to file error");
+    let result = fs::write(ciphred_filename, ciphred);
+
+    match result {
+        Ok(_) => Ok("Ciphered succesfully".to_string()),
+        Err(_) => Err("Error: Failed saving to file".to_string()),
+    }
 }
 
-fn decipher(stdin: &Stdin, content: &mut Vec<u8>, key: &mut Vec<u8>) {
+fn decipher(stdin: &Stdin, content: &mut Vec<u8>, key: &mut Vec<u8>) -> Result<String, String> {
     if content.is_empty() {
         println!("There is no message currently loaded");
         *content = load(stdin, "Ciphred Message").unwrap_or_default();
@@ -90,14 +104,12 @@ fn decipher(stdin: &Stdin, content: &mut Vec<u8>, key: &mut Vec<u8>) {
         *key = load(stdin, "Key").unwrap_or_default();
     }
     if content.is_empty() || key.is_empty() {
-        println!("Couldn't find key or message");
-        return;
+        return Err("Error: Couldn't find key or message".to_string());
     }
-    println!("Type filename of 'deciphred_file'.");
+    println!("Type filename of result file of deciphering.");
     let filenames = get_filenames(stdin);
     if filenames.0.is_none() {
-        println!("Wrong file names");
-        return;
+        return Err("Error: Wrong file names".to_string());
     }
     let deciphred_filename = filenames.0.unwrap();
 
@@ -105,7 +117,7 @@ fn decipher(stdin: &Stdin, content: &mut Vec<u8>, key: &mut Vec<u8>) {
 
     if key.len() < content.len() {
         println!("Error: key and ciphred file have diffrent sizes.");
-        return;
+        return Err("Error: key and ciphred file have diffrent sizes.".to_string());
     }
     for index in 0..content.len() {
         let key_byte = key[index];
@@ -114,14 +126,15 @@ fn decipher(stdin: &Stdin, content: &mut Vec<u8>, key: &mut Vec<u8>) {
         deciphred_message.push(cipher_byte ^ key_byte);
     }
     let message = String::from_utf8(deciphred_message);
-    match message {
-        Ok(msg) => {
-            println!("{}", msg);
-            fs::write(deciphred_filename, msg).expect("Writting to file error");
-        },
-        Err(error) => {
-            println!("{}", error);
+    if let Ok(msg) = message {
+        println!("{}", msg);
+        let result  = fs::write(deciphred_filename, msg);
+        match result {
+                Ok(_) => Ok("Succesfully deciphred".to_string()),
+                Err(_) => Err("Error: Writting to file error".to_string())
         }
+    } else {
+        Err(message.unwrap_err().to_string())
     }
 }
 
@@ -174,9 +187,11 @@ fn check_compatibility(stdin: &Stdin, key: &mut Vec<u8>) {
 
 fn get_filenames(stdin: &Stdin) -> (Option<String>, Option<String>, Option<String>) {
     let mut buffer = String::new();
-    stdin
-        .read_line(&mut buffer)
-        .expect("Error: Problems with input");
+    let result = stdin.read_line(&mut buffer);
+    if result.is_err() {
+        println!("Error: counldn't read from input");
+        return (None, None, None);
+    }
     let mut filename_iter = buffer.split_whitespace();
 
     (
@@ -195,32 +210,35 @@ fn get_filenames(stdin: &Stdin) -> (Option<String>, Option<String>, Option<Strin
     )
 }
 
-fn load(stdin: &Stdin, file_to_load_name: &str) -> Option<Vec<u8>> {
+fn load(stdin: &Stdin, file_to_load_name: &str) -> Result<Vec<u8>, String> {
     println!("Type filename of '{}'.", file_to_load_name);
     let filenames = get_filenames(stdin);
     if filenames.0.is_none() {
-        println!("Wrong input fromat");
-        return None;
+        return Err("Wrong input fromat".to_string());
     }
     let file_to_load = filenames.0.unwrap();
-    let content = fs::read(file_to_load).expect("file is not present in this folder");
+    let content_result = fs::read(file_to_load);
+    if content_result.is_err() {
+        return Err("file is not present in this folder".to_string());
+    }
+    let content = content_result.unwrap();
     let message = String::from_utf8_lossy(&content);
 
     println!("{} is {}", file_to_load_name, message);
 
-    Some(content)
+    Ok(content)
 }
 
 fn turn_into_bytes(content: &[u8]) -> String {
     let content_vec = content;
 
     content_vec
-        .into_iter()
+        .iter()
         .map(|i| i.to_string())
         .collect::<String>()
 }
 
-fn generate_key(content: &[u8]) -> Option<Vec<u8>> {
+fn generate_key(content: &[u8]) -> Vec<u8> {
     println!("Generating Key");
     let mut key = Vec::new();
     let mut rng = rand::thread_rng();
@@ -236,12 +254,16 @@ fn generate_key(content: &[u8]) -> Option<Vec<u8>> {
         .map(|i| i.to_string())
         .collect::<String>();
     println!("Key is '{}' ", key_str);
-    fs::write("key", key.clone()).expect("Writting to file error");
-    Some(key)
+    let result = fs::write("key", key.clone());
+    if result.is_err() {
+        println!("Error: couldn't save key ");
+    }
+    key
 }
 
 fn print_readme() {
-    let readme = r#"                          ___Options___
+    let readme = r#"                          
+                                            ___Options___
     1. Load Message from file ->  load content of given file and hold it in memory untill programs shutdown or read another file
     2. Turn Message to bytes ->  simply print binary representation of content loaded from file using option 1.
     3. Generate key ->  generate key for currently loaded content, print it and save to 'key' file
@@ -249,7 +271,7 @@ fn print_readme() {
     5. Decipher Loaded Message -> Using cached key and loaded content(ciphred message) it deciphers it into raw message and saves to file.
     6. Check compatibility of 2 files using key -> using cached key it load content of both files provided by client and checks if they have same content after deciphering.
     8. Clean cache -> This will clear cached key and content of file
-                                             ___Importatnt Note___
+                                            ___Importatnt Note___
     If key or Message are not loaded client will be asked for filename and they will be loaded and cached."#;
     println!("{}", readme);
 }
