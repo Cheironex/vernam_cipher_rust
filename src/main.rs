@@ -13,8 +13,8 @@ fn main() {
         println!("1. Load Message from file");
         println!("2. Turn Message to bytes");
         println!("3. Generate key");
-        println!("4. Cipher Loaded Message");
-        println!("5. Decipher Loaded Message");
+        println!("4. Encrpyt Loaded Message");
+        println!("5. Decrypt Loaded Message");
         println!("6. Check compatibility of 2 files using key");
         println!("7. Readme");
         println!("8. Clean cache");
@@ -35,8 +35,8 @@ fn main() {
             1 => store_and_print(load(&stdin, "Message"), &mut cached_content),
             2 => println!("{}", turn_into_bytes(&cached_content)),
             3 => cached_key = generate_key(&cached_content),
-            4 => print_result(cipher(&stdin, &mut cached_content, &mut cached_key)),
-            5 => print_result(decipher(&stdin, &mut cached_content, &mut cached_key)),
+            4 => print_result(encrypt(&stdin, &mut cached_content, &mut cached_key)),
+            5 => print_result(decrypt(&stdin, &mut cached_content, &mut cached_key)),
             6 => check_compatibility(&stdin, &mut cached_key),
             7 => print_readme(),
             8 => {
@@ -61,7 +61,8 @@ fn store_and_print(result: Result<Vec<u8>, String>, out_vec: &mut Vec<u8>) {
         Err(error_message) => println!("{}", error_message),
     }
 }
-fn cipher(stdin: &Stdin, content: &mut Vec<u8>, key: &mut Vec<u8>) -> Result<String, String> {
+
+fn encrypt(stdin: &Stdin, content: &mut Vec<u8>, key: &mut Vec<u8>) -> Result<String, String> {
     if content.is_empty() {
         println!("There is no message currently loaded");
         *content = load(stdin, "Raw Message").unwrap_or_default();
@@ -73,31 +74,31 @@ fn cipher(stdin: &Stdin, content: &mut Vec<u8>, key: &mut Vec<u8>) -> Result<Str
     if content.is_empty() || key.is_empty() {
         return Err("Error: Couldn't find key or message".to_string());
     }
-    println!("Type filename of result file of ciphering.");
+    println!("Type filename of result file of encrypting.");
     let filenames = get_filenames(stdin);
     if filenames.0.is_none() {
         return Err("Error: Wrong file names".to_string());
     }
-    let ciphred_filename = filenames.0.unwrap();
+    let encrypted_filename = filenames.0.unwrap();
 
-    let mut ciphred = Vec::new();
+    let mut encrypted = Vec::new();
     for iteration in 0..content.len() {
         let key_byte = key[iteration];
         let content_byte = content[iteration];
-        ciphred.push(content_byte ^ key_byte);
+        encrypted.push(content_byte ^ key_byte);
     }
-    let result = fs::write(ciphred_filename, ciphred);
+    let result = fs::write(encrypted_filename, encrypted);
 
     match result {
-        Ok(_) => Ok("Ciphered succesfully".to_string()),
+        Ok(_) => Ok("Succesfully encrypted".to_string()),
         Err(_) => Err("Error: Failed saving to file".to_string()),
     }
 }
 
-fn decipher(stdin: &Stdin, content: &mut Vec<u8>, key: &mut Vec<u8>) -> Result<String, String> {
+fn decrypt(stdin: &Stdin, content: &mut Vec<u8>, key: &mut Vec<u8>) -> Result<String, String> {
     if content.is_empty() {
         println!("There is no message currently loaded");
-        *content = load(stdin, "Ciphred Message").unwrap_or_default();
+        *content = load(stdin, "Encrypted Message").unwrap_or_default();
     }
     if key.is_empty() {
         println!("There is no message currently loaded");
@@ -106,32 +107,32 @@ fn decipher(stdin: &Stdin, content: &mut Vec<u8>, key: &mut Vec<u8>) -> Result<S
     if content.is_empty() || key.is_empty() {
         return Err("Error: Couldn't find key or message".to_string());
     }
-    println!("Type filename of result file of deciphering.");
+    println!("Type filename of result file of decrypting.");
     let filenames = get_filenames(stdin);
     if filenames.0.is_none() {
         return Err("Error: Wrong file names".to_string());
     }
-    let deciphred_filename = filenames.0.unwrap();
+    let decrypted_filename = filenames.0.unwrap();
 
-    let mut deciphred_message = Vec::new();
+    let mut decrypted_message = Vec::new();
 
     if key.len() < content.len() {
-        println!("Error: key and ciphred file have diffrent sizes.");
-        return Err("Error: key and ciphred file have diffrent sizes.".to_string());
+        println!("Error: key and encrypted file have diffrent sizes.");
+        return Err("Error: key and encrypted file have diffrent sizes.".to_string());
     }
     for index in 0..content.len() {
         let key_byte = key[index];
-        let cipher_byte = content[index];
+        let encrypted_byte = content[index];
 
-        deciphred_message.push(cipher_byte ^ key_byte);
+        decrypted_message.push(encrypted_byte ^ key_byte);
     }
-    let message = String::from_utf8(deciphred_message);
+    let message = String::from_utf8(decrypted_message);
     if let Ok(msg) = message {
         println!("{}", msg);
-        let result  = fs::write(deciphred_filename, msg);
+        let result = fs::write(decrypted_filename, msg);
         match result {
-                Ok(_) => Ok("Succesfully deciphred".to_string()),
-                Err(_) => Err("Error: Writting to file error".to_string())
+            Ok(_) => Ok("Succesfully decrypted".to_string()),
+            Err(_) => Err("Error: Writting to file error".to_string()),
         }
     } else {
         Err(message.unwrap_err().to_string())
@@ -143,29 +144,29 @@ fn check_compatibility(stdin: &Stdin, key: &mut Vec<u8>) {
         println!("There is no message currently loaded");
         *key = load(stdin, "Key").unwrap_or_default();
     }
-    println!("Type filenames of 'ciphred_file deciphred_file'.");
+    println!("Type filenames of 'encrypted_file decrypted_file'.");
     let filenames = get_filenames(stdin);
     if filenames.0.is_none() || filenames.1.is_none() {
         println!("Wrong file names");
         return;
     }
 
-    let ciphred_conent =
+    let encrypted_conent =
         fs::read(filenames.0.unwrap()).expect("file is not present in this folder");
-    let deciphred_conent =
+    let decrypted_conent =
         fs::read(filenames.1.unwrap()).expect("file is not present in this folder");
 
-    if ciphred_conent.is_empty() || key.is_empty() || deciphred_conent.is_empty() {
-        println!("Could't find ciphred file, deciphred file or key");
+    if encrypted_conent.is_empty() || key.is_empty() || decrypted_conent.is_empty() {
+        println!("Could't find encrypted file, decrypted file or key");
         return;
     }
     let mut files_match = false;
-    if ciphred_conent.len() != key.len() {
-        println!("Key don't match ciphred_message");
+    if encrypted_conent.len() != key.len() {
+        println!("Key don't match encrypted_message");
         files_match = true;
     }
-    if deciphred_conent.len() != key.len() {
-        println!("Key don't match deciphred_message");
+    if decrypted_conent.len() != key.len() {
+        println!("Key don't match encrypted_message");
         files_match = true;
     }
     if files_match {
@@ -173,11 +174,11 @@ fn check_compatibility(stdin: &Stdin, key: &mut Vec<u8>) {
         return;
     }
 
-    for index in 0..ciphred_conent.len() {
-        let ciphred_byte = ciphred_conent[index];
-        let deciphred_byte = deciphred_conent[index];
+    for index in 0..encrypted_conent.len() {
+        let encrypted_byte = encrypted_conent[index];
+        let decrypted_byte = decrypted_conent[index];
         let key_byte = key[index];
-        if deciphred_byte != (ciphred_byte ^ key_byte) {
+        if decrypted_byte != (encrypted_byte ^ key_byte) {
             println!("Files don't match");
             return;
         }
@@ -224,7 +225,7 @@ fn load(stdin: &Stdin, file_to_load_name: &str) -> Result<Vec<u8>, String> {
     let content = content_result.unwrap();
     let message = String::from_utf8_lossy(&content);
 
-    println!("{} is {}", file_to_load_name, message);
+    println!("{} is '{}'", file_to_load_name, message);
 
     Ok(content)
 }
@@ -267,9 +268,9 @@ fn print_readme() {
     1. Load Message from file ->  load content of given file and hold it in memory untill programs shutdown or read another file
     2. Turn Message to bytes ->  simply print binary representation of content loaded from file using option 1.
     3. Generate key ->  generate key for currently loaded content, print it and save to 'key' file
-    4. Cipher Loaded Message -> Using cached key and loaded content(raw message) it ciphers content and save it to file
-    5. Decipher Loaded Message -> Using cached key and loaded content(ciphred message) it deciphers it into raw message and saves to file.
-    6. Check compatibility of 2 files using key -> using cached key it load content of both files provided by client and checks if they have same content after deciphering.
+    4. Encrypt Loaded Message -> Using cached key and loaded content(raw message) it encrypts content and save it to file
+    5. Decrypt Loaded Message -> Using cached key and loaded content(encrypted message) it decrypting it into raw message and saves to file.
+    6. Check compatibility of 2 files using key -> using cached key it load content of both files provided by client and checks if they have same content after decrypting.
     8. Clean cache -> This will clear cached key and content of file
                                             ___Importatnt Note___
     If key or Message are not loaded client will be asked for filename and they will be loaded and cached."#;
